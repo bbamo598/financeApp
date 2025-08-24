@@ -1,4 +1,5 @@
 import flet as ft
+import hashlib
 from auth.db import get_user_by_email
 
 class MyButton(ft.CupertinoFilledButton):
@@ -13,20 +14,23 @@ def login_view(page: ft.Page) -> ft.View:
     # Champs Email et Mot de passe
     email_field = ft.TextField(label="Email", width=300)
     password_field = ft.TextField(label="Mot de passe", password=True, width=300)
-    message=ft.Text(value="", color="red")
+    message = ft.Text(value="", color="red")
     
     # Fonction pour vérifier les informations de connexion
     def login_action(e):
         user = get_user_by_email(email_field.value)
-        if user and user[3] == password_field.value:  # index 3 = password dans la table users
-            # Connexion réussie, redirection vers le menu
-            page.go("/menu")
-        else:
-            # Affichage d’un message d’erreur
-            message.value="Email ou mot de passe incorrect",
-            page.update()
+        if user:
+            # Hash du mot de passe saisi
+            password_hash = hashlib.sha256(password_field.value.encode()).hexdigest()
+            if user[3] == password_hash:  # index 3 = password hashé dans la table users
+                # Connexion réussie, redirection vers le menu
+                page.go("/menu")
+                return
+        
+        # Si email ou mot de passe incorrect
+        message.value = "Email ou mot de passe incorrect"
+        page.update()
     
-    # Vue de connexion
     return ft.View(
         "/login",
         controls=[

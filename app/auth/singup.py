@@ -1,4 +1,5 @@
 import flet as ft
+import hashlib
 from auth.db import insert_user, get_user_by_email
 
 class MyButton(ft.CupertinoFilledButton):
@@ -9,6 +10,10 @@ class MyButton(ft.CupertinoFilledButton):
         self.on_click = on_click  
         self.width = 500  
 
+def hash_password(password: str) -> str:
+    """Hashage simple SHA256 (à remplacer par bcrypt/argon2 en prod)."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
 def signup_view(page: ft.Page):
     username = ft.TextField(label="Nom d'utilisateur", width=300)
     email = ft.TextField(label="Email", width=300)
@@ -17,22 +22,33 @@ def signup_view(page: ft.Page):
     message = ft.Text(value="", color="red")
 
     def handle_signup(e):
+        # Vérif champs vides
         if not username.value or not email.value or not password.value:
             message.value = "Veuillez remplir tous les champs."
+            message.color = "red"
             page.update()
             return
 
-        # Vérification si email déjà utilisé
+        # Vérification unicité email
         if get_user_by_email(email.value):
             message.value = "Cet email est déjà utilisé."
-            page.update()
+            message.color = "red"
+            message.update()
             return
 
+        # Hash du mot de passe avant stockage
+        hashed_pwd = hash_password(password.value)
+
         # Sauvegarde en BD
-        insert_user(username.value, email.value, password.value)
-        message.value = "Inscription réussie"
+        insert_user(username.value, email.value, hashed_pwd)
+
+        # Message de succès
+        message.value = "Inscription réussie \nVeuillez confirmer votre email pour activer le compte."
         message.color = "green"
         page.update()
+
+        # (Optionnel) Redirection auto après quelques secondes
+        #page.go("/login")
 
     return ft.View(
         "/signup",
@@ -48,6 +64,5 @@ def signup_view(page: ft.Page):
             password,
             MyButton("S’inscrire", on_click=handle_signup),
             message,
-            #MyButton("Aller à la connexion", on_click=lambda e: page.go("/login")),
         ],
     )
