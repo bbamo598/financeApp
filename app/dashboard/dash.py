@@ -1,87 +1,105 @@
 import flet as ft
 
-def dashboard_view(page: ft.Page, gain: int, objectifs: list) -> ft.View:
-    # Calcul de la progression globale
-    total_montant = sum(obj["montant"] for obj in objectifs) if objectifs else 0
-    total_encaissé = sum(obj.get("encaissé", 0) for obj in objectifs) if objectifs else 0
-    progression = (total_encaissé / total_montant * 100) if total_montant else 0
+def dashboard_view(page: ft.Page) -> ft.View:
 
-    # Affichage des indicateurs principaux
-    indicateurs = ft.Row(
-        controls=[
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Gain actuel", size=14, weight=ft.FontWeight.BOLD),
-                        ft.Text(f"{gain} FCFA", size=22, weight=ft.FontWeight.BOLD, color="green"),
-                    ], alignment="center"),
-                    padding=20,
-                ),
-                width=200, height=120
+    # Données
+    depenses_prevues = 1500
+    depenses_effectuees = 1250
+    depenses_per = (depenses_effectuees * 100)/depenses_prevues
+    depenses_per= int(depenses_per)
+    reste_per=100 - depenses_per
+    epargne = 400
+
+    # Vue dépenses
+
+    depenses_card = ft.Card(
+        content=ft.Container(
+            content=ft.Column([
+                ft.Text("Dépenses", size=25, weight="bold"),
+                ft.Text(f"Prévu: {depenses_prevues} FCFA", size=20),
+                ft.Text(f"Effectué: {depenses_effectuees} FCFA", size=20, color=ft.Colors.BLUE),
+                ft.Text(f"Reste: {depenses_prevues - depenses_effectuees} FCFA", size=20, color=ft.Colors.PURPLE),
+            ]),
+            padding=20,
+        )
+    )
+
+    #PieChart
+
+    normal_radius = 50
+    hover_radius = 60
+    normal_title_style = ft.TextStyle(
+        size=16, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD
+    )
+    hover_title_style = ft.TextStyle(
+        size=22,
+        color=ft.Colors.WHITE,
+        weight=ft.FontWeight.BOLD,
+        shadow=ft.BoxShadow(blur_radius=2, color=ft.Colors.BLACK54),
+    )
+
+    def on_chart_event(e: ft.PieChartEvent):
+        for idx, section in enumerate(chart.sections):
+            if idx == e.section_index:
+                section.radius = hover_radius
+                section.title_style = hover_title_style
+            else:
+                section.radius = normal_radius
+                section.title_style = normal_title_style
+        chart.update()
+
+
+    chart = ft.PieChart(
+        sections=[
+            ft.PieChartSection(
+                depenses_per,
+                title=f"{depenses_per}%",
+                #title_style=normal_title_style,
+                color=ft.Colors.BLUE,
+                radius=normal_radius,
             ),
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Progression globale", size=14, weight=ft.FontWeight.BOLD),
-                        ft.Text(f"{progression:.2f} %", size=22, weight=ft.FontWeight.BOLD, color="blue"),
-                        ft.ProgressBar(value=progression/100 if total_montant else 0, width=150),
-                    ], alignment="center"),
-                    padding=20,
-                ),
-                width=220, height=120
-            ),
-        ],
-        alignment="center",
-        spacing=20
+            ft.PieChartSection(
+                reste_per,
+                title=f"{reste_per}%",
+                #title_style=normal_title_style,
+                color=ft.Colors.PURPLE,
+                radius=normal_radius,
+            )],
+        sections_space=0,
+        center_space_radius=40,
+        on_chart_event=on_chart_event,
+        expand=True,
     )
 
-    # Liste rapide des 3 derniers objectifs
-    derniers_objectifs = ft.Column(
-        controls=[
-            ft.Text("Derniers objectifs", size=18, weight=ft.FontWeight.BOLD)
-        ] + [
-            ft.ListTile(
-                leading=ft.Icon(ft.Icons.FLAG, color="blue"),
-                title=ft.Text(obj["nom"]),
-                subtitle=ft.Text(f"{obj.get('encaissé', 0)}/{obj['montant']} FCFA"),
-                trailing=ft.ProgressBar(
-                    value=(obj.get("encaissé", 0)/obj["montant"]) if obj["montant"] else 0,
-                    width=100
-                )
-            ) for obj in objectifs[-3:]
-        ]
-    )
 
-    # Boutons d’actions rapides
-    actions = ft.Row(
-        controls=[
-            ft.ElevatedButton("Ajouter Dépense", icon=ft.Icons.REMOVE, on_click=lambda _: page.go("/depenses")),
-            ft.ElevatedButton("Ajouter Recette", icon=ft.Icons.ADD, on_click=lambda _: page.go("/recettes")),
-            ft.ElevatedButton("Voir Objectifs", icon=ft.Icons.FLAG, on_click=lambda _: page.go("/objectifs")),
-        ],
-        alignment="center",
-        spacing=15
-    )
+
+
+
+
+
+
+
+
+
+
+
 
     return ft.View(
         "/bord",
         controls=[
             ft.AppBar(
-                title=ft.Text("Paramètres"),
+                title=ft.Text("Tableau de Bord"),
                 leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: page.go("/menu")),
             ),
-            ft.Column(
-                controls=[
-                    ft.Text("Résumé financier", size=22, weight=ft.FontWeight.BOLD),
-                    indicateurs,
-                    ft.Divider(),
-                    derniers_objectifs,
-                    ft.Divider(),
-                    actions
-                ],
+            ft.ListView(
                 expand=True,
-                horizontal_alignment="center",
-                scroll=ft.ScrollMode.AUTO
+                spacing=20,
+                padding=20,
+                controls=[
+                    ft.Icon(name=ft.Icons.DASHBOARD, size=150, color="#3FEB82"),
+                    depenses_card,
+                    chart,
+                ]
             )
         ]
     )

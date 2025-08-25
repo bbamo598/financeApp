@@ -1,114 +1,132 @@
 import flet as ft
-from menu import menu_view
 
-# Bouton personnalisé
-class MyButton(ft.CupertinoFilledButton):
-    def __init__(self, text, on_click):
-        super().__init__()
-        self.bgcolor = "#3FEB82"
-        self.text = text
-        self.on_click = on_click  
-        self.width = 500   
+def dashboard_view(page: ft.Page, gain: int, objectifs: list, depenses: list = None, epargne: int = 0) -> ft.View:
+    depenses = depenses or []
 
-# Variables globales
-gain = 5000
-depense = 4200
+    # Calcul de la progression globale des objectifs
+    total_montant = sum(obj["montant"] for obj in objectifs) if objectifs else 0
+    total_encaissé = sum(obj.get("encaissé", 0) for obj in objectifs) if objectifs else 0
+    progression = (total_encaissé / total_montant * 100) if total_montant else 0
 
-categories = [
-    {"nom": "Alimentation", "montant": 1200},
-    {"nom": "Transport", "montant": 800},
-    {"nom": "Loisirs", "montant": 500},
-    {"nom": "Santé", "montant": 700},
-]
+    # Calcul du solde global (gain - total dépenses - épargne)
+    total_depenses = sum(dep["montant"] for dep in depenses) if depenses else 0
+    solde_global = gain - total_depenses - epargne
 
-def budget_view(page: ft.Page) -> ft.View:
-
-    # --- Carte Budget résumé ---
-    budget_summary = ft.Card(
+    # Carte solde
+    solde_card = ft.Card(
         content=ft.Container(
             content=ft.Column([
-                ft.Text("Budget du mois", size=20, weight=ft.FontWeight.BOLD),
-                ft.Text(f"Prévu : {gain} FCFA | Reste : {depense} FCFA", size=18),
-                ft.ProgressBar(width=300, value=depense / gain if gain else 0)
-            ]),
+                ft.Text("Solde global", size=16, weight=ft.FontWeight.BOLD),
+                ft.Text(f"{solde_global} FCFA", size=20, weight=ft.FontWeight.BOLD, color="green")
+            ], alignment="center"),
             padding=20
         ),
-        elevation=3
+        width=250, height=120
     )
 
-    # --- Catégories ---
-    categories_grid = ft.GridView(
-        expand=True,
-        runs_count=2,
-        child_aspect_ratio=2.5,
-        spacing=15,
-        run_spacing=15,
-    )
-
-    for cat in categories:
-        categories_grid.controls.append(
+    # Carte indicateurs clés
+    indicateurs = ft.Row(
+        controls=[
             ft.Card(
                 content=ft.Container(
-                    content=ft.Text(f"{cat['nom']} : {cat['montant']} FCFA"),
-                    padding=10
-                )
-            )
-        )
-
-    # --- Ajout d’un budget (dynamique) ---
-    budget_list = ft.Column()
-    new_budget = ft.TextField(label="Entrez le montant (FCFA)", width=300)
-
-    def add_clicked(e):
-        global gain  # utiliser la variable globale
-        global depense
-        if new_budget.value.strip():
-            try:
-                nouvelle_valeur = int(new_budget.value)
-                gain = nouvelle_valeur  # mise à jour du gain global
-                depense= 0
-
-                # Mettre à jour la carte budget
-                budget_summary.content = ft.Container(
                     content=ft.Column([
-                        ft.Text("Budget du mois", size=20, weight=ft.FontWeight.BOLD),
-                        ft.Text(f"Prévu : {gain} FCFA | Reste : {depense} FCFA", size=18),
-                        ft.ProgressBar(width=300, value=depense / gain if gain else 0)
-                    ]),
+                        ft.Text("Gain actuel", size=14, weight=ft.FontWeight.BOLD),
+                        ft.Text(f"{gain} FCFA", size=18, weight=ft.FontWeight.BOLD, color="green")
+                    ], alignment="center"),
                     padding=20
+                ),
+                width=200, height=120
+            ),
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Progression Objectifs", size=14, weight=ft.FontWeight.BOLD),
+                        ft.Text(f"{progression:.2f} %", size=18, weight=ft.FontWeight.BOLD, color="blue"),
+                        ft.ProgressBar(value=progression/100 if total_montant else 0, width=150)
+                    ], alignment="center"),
+                    padding=20
+                ),
+                width=220, height=120
+            ),
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Dépenses totales", size=14, weight=ft.FontWeight.BOLD),
+                        ft.Text(f"{total_depenses} FCFA", size=18, weight=ft.FontWeight.BOLD, color="red")
+                    ], alignment="center"),
+                    padding=20
+                ),
+                width=200, height=120
+            )
+        ],
+        alignment="center",
+        spacing=20
+    )
+
+    # Derniers objectifs
+    derniers_objectifs = ft.Column(
+        controls=[
+            ft.Text("Derniers objectifs", size=18, weight=ft.FontWeight.BOLD)
+        ] + [
+            ft.ListTile(
+                leading=ft.Icon(ft.Icons.FLAG, color="blue"),
+                title=ft.Text(obj["nom"]),
+                subtitle=ft.Text(f"{obj.get('encaissé', 0)}/{obj['montant']} FCFA"),
+                trailing=ft.ProgressBar(
+                    value=(obj.get("encaissé", 0)/obj["montant"]) if obj["montant"] else 0,
+                    width=100
                 )
+            ) for obj in objectifs[-3:]
+        ]
+    )
 
-                # Ajouter à la liste pour affichage
-                budget_list.controls.append(
-                    ft.Text(f"Budget ajouté : {gain} FCFA", size=16, weight=ft.FontWeight.BOLD)
-                )
+    # Actions rapides
+    actions = ft.Row(
+        controls=[
+            ft.ElevatedButton("Ajouter Dépense", icon=ft.Icons.REMOVE, on_click=lambda _: page.go("/depenses")),
+            ft.ElevatedButton("Ajouter Recette", icon=ft.Icons.ADD, on_click=lambda _: page.go("/recettes")),
+            ft.ElevatedButton("Voir Objectifs", icon=ft.Icons.FLAG, on_click=lambda _: page.go("/objectifs")),
+            ft.ElevatedButton("Budget & Épargne", icon=ft.Icons.SAVINGS, on_click=lambda _: page.go("/budget")),
+            ft.ElevatedButton("Générer Rapport", icon=ft.Icons.PIE_CHART, on_click=lambda _: generate_report(page)),
+        ],
+        alignment="center",
+        spacing=15
+    )
 
-                new_budget.value = ""
-                page.update()
-            except ValueError:
-                new_budget.error_text = "Veuillez entrer un nombre valide"
-                page.update()
-
-    # --- Vue principale ---
     return ft.View(
-        "/budget",
+        "/dashboard",
         controls=[
             ft.AppBar(
-                title=ft.Text("Budget"),
-                leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: page.go("/menu")),
+                title=ft.Text("Tableau de bord"),
+                leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: page.go("/menu"))
             ),
-            ft.ListView(
-                expand=True,
-                spacing=20,
-                padding=20,
+            ft.Column(
                 controls=[
-                    ft.Icon(name=ft.Icons.ACCOUNT_CIRCLE, size=150),
-                    budget_summary,
-                    categories_grid,
-                    new_budget,
-                    ft.FloatingActionButton(icon=ft.Icons.ADD, on_click=add_clicked),
-                    budget_list,
-                ]
+                    solde_card,
+                    ft.Divider(),
+                    indicateurs,
+                    ft.Divider(),
+                    derniers_objectifs,
+                    ft.Divider(),
+                    actions
+                ],
+                expand=True,
+                horizontal_alignment="center",
+                scroll=ft.ScrollMode.AUTO
             )
         ]
     )
+
+# Fonction de génération de rapport (placeholder)
+def generate_report(page: ft.Page):
+    page.dialog = ft.AlertDialog(
+        title=ft.Text("Rapport financier"),
+        content=ft.Text("Le rapport est généré automatiquement avec vos données."),
+        actions=[ft.ElevatedButton("Fermer", on_click=lambda e: close_dialog(page))]
+    )
+    page.dialog.open = True
+    page.update()
+
+def close_dialog(page: ft.Page):
+    page.dialog.open = False
+    page.update()

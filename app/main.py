@@ -51,7 +51,7 @@ def main(page: ft.Page):
         elif page.route == "/parameters":
             page.views.append(parameters_view(page))
         elif page.route == "/bord":
-            page.views.append(dashboard_view(page, gain, objectifs))
+            page.views.append(dashboard_view(page))
         elif page.route == "/budget":
             page.views.append(budget_view(page))
         elif page.route == "/objectifs":
