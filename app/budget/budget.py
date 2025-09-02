@@ -1,43 +1,52 @@
 import flet as ft
+import sqlite3
 from menu import menu_view
 
-# Bouton personnalisé
-class MyButton(ft.CupertinoFilledButton):
-    def __init__(self, text, on_click):
-        super().__init__()
-        self.bgcolor = "#3FEB82"
-        self.text = text
-        self.on_click = on_click  
-        self.width = 500   
+# ===================== BD SQLITE ===================== #
+conn = sqlite3.connect("budget.db", check_same_thread=False)
+cursor = conn.cursor()
 
-# Variables globales
-gain = 0
-depense = 0
+# Table des catégories (ajout colonne amount)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    percentage REAL NOT NULL,
+    amount REAL DEFAULT 0
+)
+""")
 
-# Pourcentages pour les catégories
-categories_percent = {
-    "Obligations": 0.4,
-    "Loisirs": 0.2,
-    "Urgence": 0.1,
-    "Investisement": 0.1
-}
+# Table des gains
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS gains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    amount REAL NOT NULL
+)
+""")
 
+conn.commit()
+
+# ===================== UI ===================== #
 def budget_view(page: ft.Page) -> ft.View:
-
     # --- Carte Budget résumé ---
     budget_summary = ft.Card()
-    
+
+    # Récupérer le dernier gain
+    cursor.execute("SELECT amount FROM gains ORDER BY id DESC LIMIT 1")
+    row = cursor.fetchone()
+    gain = row[0] if row else 0
+
     def update_budget_summary():
         budget_summary.content = ft.Container(
             content=ft.Column([
                 ft.Text("Budget du mois", size=20, weight=ft.FontWeight.BOLD),
-                ft.Text(f"Total : {gain} FCFA | Reste : {gain*0.1} FCFA", size=35),
-                ft.ProgressBar(width=300, value=depense / gain if gain else 0)
+                ft.Text(f"Total : {gain} FCFA | Reste : {gain*0.1} FCFA", size=25),
+                ft.ProgressBar(width=300, value=0.1 if gain else 0)
             ]),
             padding=20
         )
         page.update()
-    
+
     update_budget_summary()
 
     # --- Catégories calculées dynamiquement ---
@@ -51,41 +60,67 @@ def budget_view(page: ft.Page) -> ft.View:
 
     def update_categories():
         categories_grid.controls.clear()
-        for cat_name, pct in categories_percent.items():
-            montant = int(gain * pct)
+        cursor.execute("SELECT name, amount FROM categories")
+        for cat_name, montant in cursor.fetchall():
             categories_grid.controls.append(
                 ft.Card(
                     content=ft.Container(
-                        content=ft.Text(f"{cat_name} :\n {montant} FCFA", size= 30),
+                        content=ft.Text(f"{cat_name} :\n {montant:.0f} FCFA", size=25),
                         padding=10
                     )
                 )
             )
         page.update()
-    
+
     update_categories()
 
-    # --- Ajout d’un budget dynamique ---
-    budget_list = ft.Column()
+    # --- Ajout d’un gain (budget total) ---
     new_budget = ft.TextField(label="Entrez un budget (FCFA)", width=300)
 
-    def add_clicked(e):
-        global gain
+    def add_budget(e):
+        nonlocal gain
         if new_budget.value.strip():
             try:
                 nouvelle_valeur = int(new_budget.value)
                 gain = nouvelle_valeur
-                depense = gain*0.1
-                update_budget_summary()
-                update_categories()  # mise à jour des montants des catégories
-                ##budget_list.controls.append(
-                #    ft.Text(f"Budget ajouté : {gain} FCFA", size=16, weight=ft.FontWeight.BOLD)
-               # )
+                cursor.execute("INSERT INTO gains (amount) VALUES (?)", (gain,))
+                conn.commit()
+
+                # 🔄 Mettre à jour les montants des catégories déjà existantes
+                cursor.execute("SELECT id, percentage FROM categories")
+                for cat_id, pct in cursor.fetchall():
+                    montant = gain * pct
+                    cursor.execute("UPDATE categories SET amount=? WHERE id=?", (montant, cat_id))
+                conn.commit()
+
                 new_budget.value = ""
-                page.update()
+                update_budget_summary()
+                update_categories()
             except ValueError:
                 new_budget.error_text = "Veuillez entrer un nombre valide"
-                page.update()
+            page.update()
+
+    # --- Ajout d’une nouvelle catégorie ---
+    cat_name = ft.TextField(label="Nom de la catégorie", width=300)
+    cat_pct = ft.TextField(label="Pourcentage (0.0 - 1.0)", width=300)
+
+    def add_category(e):
+        try:
+            name = cat_name.value.strip()
+            pct = float(cat_pct.value.strip())
+            if not (0 < pct <= 1):
+                cat_pct.error_text = "Le pourcentage doit être entre 0 et 1"
+            elif name:
+                montant = gain * pct  # 🔄 Calcul du montant selon le budget actuel
+                cursor.execute("INSERT INTO categories (name, percentage, amount) VALUES (?, ?, ?)", (name, pct, montant))
+                conn.commit()
+                cat_name.value, cat_pct.value = "", ""
+                update_categories()
+            else:
+                cat_name.error_text = "Nom requis"
+        except ValueError:
+            cat_pct.error_text = "Veuillez entrer un nombre valide"
+        page.update()
 
     # --- Vue principale ---
     return ft.View(
@@ -100,13 +135,22 @@ def budget_view(page: ft.Page) -> ft.View:
                 spacing=20,
                 padding=20,
                 controls=[
-                    ft.Icon(name=ft.Icons.WALLET, size=150, color="#3FEB82"),
+                    ft.Icon(name=ft.Icons.WALLET, size=100, color="#3FEB82"),
                     budget_summary,
+                    ft.Text("Définir un budget :", size=18, weight=ft.FontWeight.BOLD),
                     new_budget,
-                    ft.FloatingActionButton(icon=ft.Icons.ADD, on_click=add_clicked),
-                    budget_list,
-                    categories_grid,
+                    ft.FloatingActionButton(icon=ft.Icons.ADD, on_click=add_budget),
+                    ft.Divider(),
+                    ft.Text("Ajouter une catégorie :", size=18, weight=ft.FontWeight.BOLD),
 
+                    # 📌 En colonne
+                    ft.Column([
+                        cat_name,
+                        cat_pct,
+                        ft.ElevatedButton("Ajouter", icon=ft.Icons.ADD, on_click=add_category)
+                    ], spacing=10, width=300),
+
+                    categories_grid
                 ]
             )
         ]

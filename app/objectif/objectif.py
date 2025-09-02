@@ -1,38 +1,57 @@
 import flet as ft
+import sqlite3
 
-# Liste globale des objectifs
-objectifs = []  # Exemple : {"nom": "Vacances", "montant": 100000, "pourcentage": 20, "encaissé": 0}
+# Connexion SQLite
+conn = sqlite3.connect("objectifs.db", check_same_thread=False)
+cursor = conn.cursor()
 
-def objectifs_view(page: ft.Page, gain: int) -> ft.View:
+# Création de la table si elle n'existe pas
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS objectifs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL,
+    montant INTEGER NOT NULL,
+    pourcentage INTEGER NOT NULL,
+    encaisse INTEGER NOT NULL
+)
+""")
+conn.commit()
+
+
+def objectifs_view(page: ft.Page):
 
     # Colonne pour afficher les objectifs
     objectifs_list = ft.Column()
 
-    # Champ de saisie pour un nouvel objectif
+    # Champs de saisie
     nom_field = ft.TextField(label="Nom de l'objectif", width=300)
     montant_field = ft.TextField(label="Montant (FCFA)", width=200, keyboard_type=ft.KeyboardType.NUMBER)
     pourcentage_field = ft.TextField(label="Pourcentage du budget (%)", width=200, keyboard_type=ft.KeyboardType.NUMBER)
 
-    # Label pour résumé global
-    total_label = ft.Text("Total objectif : 0 FCFA | Total encaissé : 0 FCFA | Progression globale : 0%", size=18, weight=ft.FontWeight.BOLD)
+    # Label résumé global
+    total_label = ft.Text("Chargement...", size=18, weight=ft.FontWeight.BOLD)
 
-    # Fonction pour rafraîchir les cartes objectifs
-    def update_objectifs():
+    # Fonction pour charger les objectifs depuis la BD
+    def load_objectifs():
         objectifs_list.controls.clear()
+        cursor.execute("SELECT nom, montant, pourcentage, encaisse FROM objectifs")
+        rows = cursor.fetchall()
+
         total_montant = 0
-        total_encaissé = 0
-        for obj in objectifs:
-            total_montant += obj["montant"]
-            total_encaissé += obj.get("encaissé", 0)
+        total_encaisse = 0
+
+        for nom, montant, pourcentage, encaisse in rows:
+            total_montant += montant
+            total_encaisse += encaisse
             objectifs_list.controls.append(
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column([
-                            ft.Text(f"{obj['nom']}", size=16, weight=ft.FontWeight.BOLD),
-                            ft.Text(f"Montant à atteindre : {obj['montant']} FCFA"),
-                            ft.Text(f"Montant déjà encaissé : {obj.get('encaissé', 0)} FCFA"),
+                            ft.Text(nom, size=16, weight=ft.FontWeight.BOLD),
+                            ft.Text(f"Montant à atteindre : {montant} FCFA"),
+                            ft.Text(f"Montant déjà encaissé : {encaisse} FCFA"),
                             ft.ProgressBar(
-                                value=obj.get("encaissé",0)/obj["montant"] if obj["montant"] else 0,
+                                value=encaisse/montant if montant else 0,
                                 width=300
                             )
                         ]),
@@ -40,27 +59,40 @@ def objectifs_view(page: ft.Page, gain: int) -> ft.View:
                     )
                 )
             )
-        # Mise à jour du résumé global
-        progression = (total_encaissé / total_montant * 100) if total_montant else 0
-        total_label.value = f"Total objectif : {total_montant} FCFA | Total encaissé : {total_encaissé} FCFA | Progression globale : {progression:.2f}%"
+
+        progression = (total_encaisse / total_montant * 100) if total_montant else 0
+        total_label.value = f"Total objectif : {total_montant} FCFA | Total encaissé : {total_encaisse} FCFA | Progression globale : {progression:.2f}%"
         page.update()
 
-    # Fonction pour ajouter un nouvel objectif
+    # Fonction pour ajouter un objectif
     def add_objectif(e):
         try:
             nom = nom_field.value.strip()
             montant = int(montant_field.value)
-            epargne = 500000
             pourcentage = int(pourcentage_field.value)
+            epargne = 500000  # Exemple fixe
             if nom and montant > 0 and 0 < pourcentage <= 100:
-                encaissé = epargne * pourcentage // 100
-                objectifs.append({"nom": nom, "montant": montant, "pourcentage": pourcentage, "encaissé": encaissé})
+                encaisse = epargne * pourcentage // 100
+
+                # Insertion BD
+                cursor.execute(
+                    "INSERT INTO objectifs (nom, montant, pourcentage, encaisse) VALUES (?, ?, ?, ?)",
+                    (nom, montant, pourcentage, encaisse)
+                )
+                conn.commit()
+
+                # Réinitialiser champs
                 nom_field.value = ""
                 montant_field.value = ""
                 pourcentage_field.value = ""
-                update_objectifs()
+
+                # Rafraîchir affichage
+                load_objectifs()
         except ValueError:
-            pass  # Ignorer si montant ou pourcentage non valides
+            pass
+
+    # Charger les objectifs existants
+    load_objectifs()
 
     return ft.View(
         "/objectifs",
