@@ -8,9 +8,10 @@ from parametres.parameters import parameters_view
 from dashboard.dash import dashboard_view
 from budget.budget import budget_view
 from objectif.objectif import objectifs_view
-from budget.budget import gain
-from objectif.objectif import objectifs
+#from budget.budget import gain
+#from objectif.objectif import objectifs
 from auth.singup import signup_view
+from depenses.depense import depense_view
 
 
 
@@ -51,13 +52,15 @@ def main(page: ft.Page):
         elif page.route == "/parameters":
             page.views.append(parameters_view(page))
         elif page.route == "/bord":
-            page.views.append(dashboard_view(page, gain, objectifs))
+            page.views.append(dashboard_view(page))
         elif page.route == "/budget":
             page.views.append(budget_view(page))
         elif page.route == "/objectifs":
-            page.views.append(objectifs_view(page, gain))
+            page.views.append(objectifs_view(page))
         elif page.route == "/signup":
             page.views.append(signup_view(page))
+        elif page.route == "/depenses":
+            page.views.append(depense_view(page))
     
         page.update()
 
