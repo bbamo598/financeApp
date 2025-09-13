@@ -1,5 +1,6 @@
 import flet as ft
 import sqlite3
+from datetime import date
 
 # Connexion SQLite
 conn = sqlite3.connect("depenses.db", check_same_thread=False)
@@ -19,6 +20,14 @@ CREATE TABLE IF NOT EXISTS depenses (
 """)
 conn.commit()
 
+# Fonction pour charger les catégories depuis la BD budget
+def load_categories():
+    conn_budget = sqlite3.connect("budget.db")
+    cursor_budget = conn_budget.cursor()
+    cursor_budget.execute("SELECT name FROM categories ORDER BY name")
+    cats = [row[0] for row in cursor_budget.fetchall()]
+    conn_budget.close()
+    return cats if cats else ["Autre"]
 
 def depense_view(page: ft.Page):
 
@@ -28,9 +37,27 @@ def depense_view(page: ft.Page):
     # Champs de saisie
     nom_field = ft.TextField(label="Nom de la dépense", width=300)
     montant_field = ft.TextField(label="Montant (FCFA)", width=200, keyboard_type=ft.KeyboardType.NUMBER)
-    categorie_field = ft.TextField(label="Catégorie", width=200)
+    
+    # Dropdown catégories
+    categorie_dropdown = ft.Dropdown(
+        options=[ft.dropdown.Option(c) for c in load_categories()],
+        value=load_categories()[0]  # valeur par défaut
+    )
+    
+    # DatePicker facultatif (vide par défaut)
     date_field = ft.TextField(label="Date de la dépense (AAAA-MM-JJ)", width=200)
-    moyen_paiement_field = ft.TextField(label="Moyen de paiement", width=200)
+    
+    
+    # Dropdown pour méthode de paiement
+    moyen_paiement_dropdown = ft.Dropdown(
+        options=[
+            ft.dropdown.Option("Cash"),
+            ft.dropdown.Option("Mobile Money"),
+            ft.dropdown.Option("Carte Bancaire")
+        ],
+        value="Cash"  # valeur par défaut
+    )
+    
     notes_field = ft.TextField(label="Notes (facultatif)", width=300)
 
     # Label résumé global
@@ -67,12 +94,13 @@ def depense_view(page: ft.Page):
         try:
             nom = nom_field.value.strip()
             montant = int(montant_field.value)
-            categorie = categorie_field.value.strip()
+            categorie = categorie_dropdown.value
+            # Si aucune date sélectionnée, prendre la date du jour
             date_dep = date_field.value.strip()
-            moyen_paiement = moyen_paiement_field.value.strip()
+            moyen_paiement = moyen_paiement_dropdown.value
             notes = notes_field.value.strip()
 
-            if not (nom and montant and categorie and date_dep and moyen_paiement):
+            if not (nom and montant and categorie and moyen_paiement):
                 return  # Champs requis manquants
 
             # Insertion BD
@@ -85,9 +113,10 @@ def depense_view(page: ft.Page):
             # Réinitialiser champs
             nom_field.value = ""
             montant_field.value = ""
-            categorie_field.value = ""
-            date_field.value = ""
-            moyen_paiement_field.value = ""
+            categorie_dropdown.options = [ft.dropdown.Option(c) for c in load_categories()]
+            categorie_dropdown.value = load_categories()[0]
+            date_field.value = None  # réinitialiser à vide
+            moyen_paiement_dropdown.value = "Cash"
             notes_field.value = ""
 
             # Rafraîchir affichage
@@ -114,9 +143,9 @@ def depense_view(page: ft.Page):
                     ft.Text("Ajouter une dépense", size=20, weight=ft.FontWeight.BOLD),
                     nom_field,
                     montant_field,
-                    categorie_field,
-                    date_field,
-                    moyen_paiement_field,
+                    ft.Column([ft.Text("Catégorie"), categorie_dropdown], spacing=5),
+                    ft.Column([ft.Text("Date de la dépense (facultatif)"), date_field], spacing=5),
+                    ft.Column([ft.Text("Moyen de paiement"), moyen_paiement_dropdown], spacing=5),
                     notes_field,
                     ft.FloatingActionButton(icon=ft.Icons.ADD, on_click=add_depense),
                     depenses_list,
