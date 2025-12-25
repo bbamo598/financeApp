@@ -1,6 +1,6 @@
 import sqlite3
 
-DB_NAME = "finance_app.db"
+DB_NAME = "databases/finance_app.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
